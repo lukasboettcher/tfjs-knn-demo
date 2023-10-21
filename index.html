@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo</title>
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <!-- Load MobileNet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+    <!-- Load KNN Classifier -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+</head>
+<style>
+    :root {
+        background-color: rgb(82, 82, 82);
+    }
+</style>
+<body>
+    <video id="webcamVideo"></video>
+
+    <div>
+        <button onclick="init()" id="start">start</button>
+
+        <input id="className" disabled ="text">
+        <label for="className">class</label>
+        <button id="addSample" disabled>add example</button>
+        <button id="inferOnce" disabled>inferOnce</button>
+    
+        <div id="console"></div>
+    </div>
+
+</body>
+<script>
+    const init = async function () {
+        start.disabled = true
+        let logits;
+        let numExamples = 0
+        // create the classifier
+        const classifier = knnClassifier.create()
+        // load mobilenet
+        const mobilenetModule = await mobilenet.load();
+        // init webcam
+        const webcam = await tf.data.webcam(webcamVideo, {
+            resizeWidth: 224,
+            resizeHeight: 224,
+        });
+
+        async function processFrame() {
+            // get webcam image
+            const frame = await webcam.capture()
+            // get model output from image
+            logits = await mobilenetModule.infer(frame);
+            frame.dispose();
+            // if classifier already has examples, get result
+            if (numExamples > 0) {
+                const result = await classifier.predictClass(logits);
+                document.getElementById('console').innerText = `
+                    prediction: ${result.label}\n
+                    probability: ${result.confidences[result.label]}
+                    `;
+            }
+            // wait until next frame is ready
+            requestAnimationFrame(processFrame);
+        }
+
+        processFrame();
+
+        // handle new examples, add them to the knn classifier
+        const inputElem = document.getElementById('className')
+        const submitBtn = document.getElementById('addSample')
+        const inferBtn = document.getElementById('inferOnce')
+        submitBtn.addEventListener('click', (e) => {
+            for (let i = 0; i < 10; i++) {
+                classifier.addExample(logits, inputElem.value);
+                numExamples++;
+            }
+        })
+        addSample.disabled = false
+        className.disabled = false
+
+        inferBtn.addEventListener('click', async () => {
+            const frame = await webcam.capture()
+            const modelOutput = await mobilenetModule.infer(frame)
+            console.log(modelOutput)
+        })
+        inferOnce.disabled = false
+    }
+</script>
+
+</html>
